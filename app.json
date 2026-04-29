@@ -1,0 +1,68 @@
+{
+  "configVersion": "v3",
+  "app": {
+    "appId": 1112850,
+    "appName": "Ace Badminton",
+    "appType": "app",
+    "version": {
+      "code": 100,
+      "name": "1.0.0"
+    },
+    "icon": "icon.png",
+    "vender": "Olaf Meng",
+    "description": "Zepp OS 羽毛球运动扩展。"
+  },
+  "permissions": [
+    "device:os.accelerometer",
+    "device:os.gyroscope",
+    "device:os.local_storage",
+    "data:user.hd.heart_rate",
+    "data:user.hd.workout"
+  ],
+  "runtime": {
+    "apiVersion": {
+      "compatible": "4.2",
+      "target": "4.2",
+      "minVersion": "3.6"
+    }
+  },
+  "targets": {
+    "default": {
+      "module": {
+        "data-widget": {
+          "widgets": [
+            {
+              "path": "page/widget/index",
+              "window": {
+                "isPinned": 1
+              },
+              "name": "Ace Badminton",
+              "icon": "icon.png",
+              "runtime": {
+                "ability": [
+                  {
+                    "type": 1,
+                    "subType": [92]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "platforms": [
+        {
+          "st": "r",
+          "dw": 466
+        },
+        {
+          "st": "s",
+          "dw": 390
+        }
+      ],
+      "designWidth": 466
+    }
+  },
+  "debug": false,
+  "defaultLanguage": "zh-CN"
+}

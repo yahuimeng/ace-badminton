@@ -1,0 +1,20 @@
+msgid "duration"
+msgstr "时长"
+
+msgid "maxSpeed"
+msgstr "最高速度"
+
+msgid "frequency"
+msgstr "频率"
+
+msgid "swings"
+msgstr "挥拍"
+
+msgid "rally"
+msgstr "连拍"
+
+msgid "forehand"
+msgstr "正手"
+
+msgid "backhand"
+msgstr "反手"

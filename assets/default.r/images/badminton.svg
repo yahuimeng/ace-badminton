@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+  <!-- 羽毛球头部 - 圆形 -->
+  <circle cx="40" cy="30" r="15" fill="#FFFFFF" stroke="#CCCCCC" stroke-width="1"/>
+  <!-- 羽毛部分 - 梯形简化 -->
+  <path d="M 30 42 L 40 80 L 50 42 Z" fill="#FFE66D" stroke="#E6C84D" stroke-width="1"/>
+  <!-- 羽毛纹理线 -->
+  <line x1="35" y1="45" x2="40" y2="75" stroke="#E6C84D" stroke-width="1"/>
+  <line x1="45" y1="45" x2="40" y2="75" stroke="#E6C84D" stroke-width="1"/>
+</svg>

@@ -1,0 +1,20 @@
+msgid "duration"
+msgstr "Duration"
+
+msgid "maxSpeed"
+msgstr "Max Speed"
+
+msgid "frequency"
+msgstr "Frequency"
+
+msgid "swings"
+msgstr "Swings"
+
+msgid "rally"
+msgstr "Rally"
+
+msgid "forehand"
+msgstr "Forehand"
+
+msgid "backhand"
+msgstr "Backhand"
