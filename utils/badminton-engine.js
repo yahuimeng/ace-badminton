@@ -220,92 +220,59 @@ function calcFeatureSet(windowSamples) {
 }
 
 // ============================================================
-// 正反手判断（双轴时序分析版）
-// 结合 X轴和Y轴的时序特征，更准确地区分：
-// 1. 正手立腕：Y轴正向 + X轴可能有微小负向（手腕下垂后立腕准备）
-// 2. 正手外展：X轴正向主导
-// 3. 反手内收：X轴负向主导，Y轴没有明显正向
-// 4. 反手外挥：X轴正向，但转向点偏前
+// 正反手判断（旋前/旋后生物力学版）
 //
-// 核心逻辑：
-// - 如果X轴负向期间Y轴均值为正且较大 → 正手立腕 → 正手
-// - 如果X轴负向期间Y轴均值接近0或负 → 反手内收 → 反手
-// - 如果有明显的立腕动作（Y轴正向峰值），且负向占比不高 → 正手
+// 核心生物力学原理：
+// - 正手击球：腕关节旋前（Pronation），拇指向下，Z轴正向峰值主导
+// - 反手击球：腕关节旋后（Supination），拇指向外，Z轴负向峰值主导
+//
+// 判断优先级：
+// 1. Z轴旋后信号（|minGyroZ| vs maxGyroZ）— 最直接的生物力学信号
+// 2. 手臂内收（meanAccelX 负向）— 反手穿越身体中线的特征
+// 3. X轴内收比例 — 辅助确认
 // ============================================================
 function classifyHand(features) {
-  const posSum = features.gyroXPositiveSum || 0
-  const negSum = features.gyroXNegativeSum || 0
+  const totalX = (features.gyroXPositiveSum || 0) + (features.gyroXNegativeSum || 0)
+
+  // X轴运动太弱，无法判断 → 默认正手
+  if (totalX < 100) return 'forehand'
+
+  // ========================================
+  // 第一优先级：Z轴旋前/旋后方向
+  // 正手：旋前 → maxGyroZ 更大
+  // 反手：旋后 → |minGyroZ| 更大
+  // ========================================
+  const zPronation  = features.maxGyroZ || 0               // 旋前峰值（正）
+  const zSupination = Math.abs(features.minGyroZ || 0)      // 旋后峰值（负轴取绝对值）
+
+  // 旋后明显强于旋前 → 反手
+  if (zSupination > zPronation * 1.4 && zSupination > 60) {
+    return 'backhand'
+  }
+
+  // 旋前明显强于旋后 → 正手（不再往下走）
+  if (zPronation > zSupination * 1.4 && zPronation > 60) {
+    return 'forehand'
+  }
+
+  // ========================================
+  // 第二优先级：手臂内收（越身体中线）
+  // 反手时手臂向内穿越，meanAccelX 偏负（右手佩戴）
+  // ========================================
+  const armCrossBody = (features.meanAccelX || 0) < -150  // cm/s²
+
+  if (armCrossBody) {
+    // 内收 + Z轴旋后倾向 → 反手
+    if (zSupination >= zPronation * 0.8) return 'backhand'
+  }
+
+  // ========================================
+  // 第三优先级：X轴内收比例（兜底）
+  // ========================================
+  const negRatio = (features.gyroXNegativeSum || 0) / totalX
   const turnPoint = features.gyroXTurnPoint || 1
-  const totalX = posSum + negSum
 
-  // 新增：Y轴时序特征
-  const gyroYNegDuringNegX = features.gyroYNegDuringNegX || 0  // X轴负向期间的Y轴均值
-  const wristLiftDetected = features.wristLiftDetected || 0     // 是否检测到立腕
-
-  // 如果X轴运动太弱，无法判断
-  if (totalX < 100) {
-    return 'forehand'  // 默认正手
-  }
-
-  // 计算正负向的比例
-  const negRatio = negSum / totalX  // 负向占比 0-1
-
-  // ========================================
-  // 第一优先级：Y轴时序分析
-  // ========================================
-
-  // 正手立腕特征：
-  // 1. X轴负向期间的Y轴均值 > 30°/s（说明负向运动时手腕正在抬起）
-  // 2. 或者检测到明显的立腕动作
-  const isWristLiftPhase = gyroYNegDuringNegX > 30 || wristLiftDetected
-
-  // 反手内收特征：
-  // X轴负向期间的Y轴均值接近0（说明没有立腕，只是内收）
-  const isPureAdduction = Math.abs(gyroYNegDuringNegX) < 20
-
-  // ========================================
-  // 第二优先级：X轴时序分析
-  // ========================================
-
-  // 反手特征：
-  // 1. 负向占比明显（> 30%）
-  // 2. 转向点偏前（< 0.8）
-  // 3. 没有立腕动作
-  const isBackhandPattern = negRatio > 0.3 && turnPoint < 0.85 && !isWristLiftPhase
-
-  // 正手特征：
-  // 1. 负向占比低（< 20%）
-  // 2. 或者即使有负向，但转向很晚（> 0.9）
-  // 3. 或者有立腕动作
-  const isForehandPattern = negRatio < 0.2 || turnPoint > 0.9 || isWristLiftPhase
-
-  // ========================================
-  // 综合判断
-  // ========================================
-
-  // 如果X轴负向期间有明显的立腕动作 → 正手
-  if (isWristLiftPhase && negRatio < 0.4) {
-    return 'forehand'
-  }
-
-  // 如果X轴负向是纯内收（没有立腕）且负向明显 → 反手
-  if (isPureAdduction && negRatio > 0.25) {
-    return 'backhand'
-  }
-
-  if (isBackhandPattern) {
-    return 'backhand'
-  }
-
-  if (isForehandPattern) {
-    return 'forehand'
-  }
-
-  // 边界情况：用综合得分判断
-  // 转向越早 + 负向越多 + 没有立腕 = 越像反手
-  const backhandScore = negRatio * (1 - turnPoint * 0.5) * (isPureAdduction ? 1.2 : 0.6)
-
-  if (backhandScore > 0.15) {
+  if (negRatio > 0.35 && turnPoint < 0.8) {
     return 'backhand'
   }
 
