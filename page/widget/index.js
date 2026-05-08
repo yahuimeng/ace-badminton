@@ -373,6 +373,13 @@ DataWidget({
       align_h: align.CENTER_H, align_v: align.CENTER_V,
       text_style: text_style.NONE, text: getText('backhand'),
     })
+
+    // ---- 四角切圆（覆盖最上层，用黑色遮住四角）----
+    const CR = 24  // 圆角半径
+    this._w(widget.CIRCLE, { center_x: 0,        center_y: 0,        radius: CR, color: 0x000000 })
+    this._w(widget.CIRCLE, { center_x: LAYOUT_W,  center_y: 0,        radius: CR, color: 0x000000 })
+    this._w(widget.CIRCLE, { center_x: 0,        center_y: LAYOUT_H,  radius: CR, color: 0x000000 })
+    this._w(widget.CIRCLE, { center_x: LAYOUT_W,  center_y: LAYOUT_H,  radius: CR, color: 0x000000 })
   },
 
   _onMotion() {
