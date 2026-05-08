@@ -2,7 +2,8 @@ import { Accelerometer, FREQ_MODE_HIGH, Gyroscope } from '@zos/sensor'
 import { getText } from '@zos/i18n'
 import { log } from '@zos/utils'
 import { localStorage } from '@zos/storage'
-import hmUI, { align, createWidget, prop, text_style, widget, setStatusBarVisible, sport_data, edit_widget_group_type, getSportData } from '@zos/ui'
+import { getSportData } from '@zos/sport'
+import hmUI, { align, createWidget, prop, text_style, widget, setStatusBarVisible, sport_data, edit_widget_group_type } from '@zos/ui'
 import { createEngine } from '../../utils/badminton-engine'
 
 const logger = log.getLogger('ace-badminton-widget')
@@ -16,7 +17,6 @@ const STORAGE_KEY = 'ace_badminton_session'
 // 暂停检测配置
 // ============================================================
 const PAUSE_CHECK_INTERVAL_MS = 1000  // 每秒检查一次
-const PAUSE_THRESHOLD_S = 10          // DURATION_NET 超过 10 秒不变 = 暂停
 
 // ============================================================
 // 颜色常量
@@ -56,87 +56,128 @@ DataWidget({
   },
 
   onInit() {
-    // 初始化传感器实例
-    this.accel = new Accelerometer()
-    this.gyro  = new Gyroscope()
-
-    // 每次进入都清空数据，重新开始
-    localStorage.removeItem(STORAGE_KEY)
-    this.engine = createEngine()
-
-    // 状态标志
-    this._lastDuration = 0
-    this._lastMotionTs = 0
-    this._isPaused = false
-    this._pauseCheckTimer = null
-    this._pageWidgets = []
-
-    logger.info('onInit: data cleared, started fresh')
+    logger.info('>>> onInit START')
+    try {
+      logger.info('>>> new Accelerometer()')
+      this.accel = new Accelerometer()
+      logger.info('>>> new Gyroscope()')
+      this.gyro  = new Gyroscope()
+      logger.info('>>> localStorage.removeItem()')
+      localStorage.removeItem(STORAGE_KEY)
+      logger.info('>>> createEngine()')
+      this.engine = createEngine()
+      logger.info('>>> init state vars')
+      this._lastDuration = 0
+      this._lastMotionTs = 0
+      this._isPaused = false
+      this._pauseCheckTimer = null
+      this._pageWidgets = []
+      logger.info('>>> onInit END')
+    } catch(e) {
+      logger.error('>>> onInit ERROR: ' + e.message)
+    }
   },
 
   build() {
-    // 隐藏矩形屏幕的状态栏
-    setStatusBarVisible(false)
-    this._buildPage()
-    this._updateFromEngine()
+    logger.info('>>> build START')
+    try {
+      logger.info('>>> setStatusBarVisible(false)')
+      setStatusBarVisible(false)
+    } catch(e) {
+      logger.error('>>> setStatusBarVisible ERROR: ' + e.message)
+    }
+    try {
+      logger.info('>>> _buildPage()')
+      this._buildPage()
+    } catch(e) {
+      logger.error('>>> _buildPage ERROR: ' + e.message)
+    }
+    try {
+      logger.info('>>> _updateFromEngine()')
+      this._updateFromEngine()
+    } catch(e) {
+      logger.error('>>> _updateFromEngine ERROR: ' + e.message)
+    }
+    logger.info('>>> build END')
   },
 
   onResume() {
-    // 检查是否从暂停恢复
-    this._checkPauseStatus()
-
-    // 启动传感器（如果运动中）
-    if (!this._isPaused) {
-      this._startSensor()
+    logger.info('>>> onResume START')
+    try {
+      logger.info('>>> _checkPauseStatus()')
+      this._checkPauseStatus()
+    } catch(e) {
+      logger.error('>>> _checkPauseStatus ERROR: ' + e.message)
     }
-
-    // 启动暂停检测计时器
-    this._startPauseTimer()
+    try {
+      if (!this._isPaused) {
+        logger.info('>>> _startSensor()')
+        this._startSensor()
+      }
+    } catch(e) {
+      logger.error('>>> _startSensor ERROR: ' + e.message)
+    }
+    try {
+      logger.info('>>> _startPauseTimer()')
+      this._startPauseTimer()
+    } catch(e) {
+      logger.error('>>> _startPauseTimer ERROR: ' + e.message)
+    }
+    logger.info('>>> onResume END')
   },
 
   onPause() {
-    // 停止传感器（暂停时不计算）
-    this._stopSensor()
-    // 停止暂停检测计时器
-    this._stopPauseTimer()
+    logger.info('>>> onPause START')
+    try { this._stopSensor() } catch(e) { logger.error('>>> _stopSensor ERROR: ' + e.message) }
+    try { this._stopPauseTimer() } catch(e) { logger.error('>>> _stopPauseTimer ERROR: ' + e.message) }
+    logger.info('>>> onPause END')
   },
 
   onDestroy() {
-    this._stopSensor()
-    this._stopPauseTimer()
-    this._clearPage()
-    // 退出页面时保存数据（包含当前 duration 用于新运动检测）
-    this._saveToStorage()
+    logger.info('>>> onDestroy START')
+    try { this._stopSensor() } catch(e) { logger.error('>>> _stopSensor ERROR: ' + e.message) }
+    try { this._stopPauseTimer() } catch(e) { logger.error('>>> _stopPauseTimer ERROR: ' + e.message) }
+    try { this._clearPage() } catch(e) { logger.error('>>> _clearPage ERROR: ' + e.message) }
+    try { this._saveToStorage() } catch(e) { logger.error('>>> _saveToStorage ERROR: ' + e.message) }
+    logger.info('>>> onDestroy END')
   },
 
   // ============================================================
   // 公开方法：结束运动，清除所有数据
   // ============================================================
   endWorkout() {
-    this.engine.reset()
-    this._clearStorage()
-    // 重置 UI 显示
-    const r = this.state.refs
-    if (r.spd)    r.spd.setProperty(prop.MORE, { text: '0' })
-    if (r.freq)   r.freq.setProperty(prop.MORE, { text: '0' })
-    if (r.swg)    r.swg.setProperty(prop.MORE, { text: '0' })
-    if (r.rally)  r.rally.setProperty(prop.MORE, { text: '0' })
-    if (r.fh)     r.fh.setProperty(prop.MORE, { text: '0' })
-    if (r.bh)     r.bh.setProperty(prop.MORE, { text: '0' })
-    logger.info('Workout ended, all data cleared')
+    logger.info('>>> endWorkout START')
+    try {
+      this.engine.reset()
+      this._clearStorage()
+      const r = this.state.refs
+      if (r.spd)    r.spd.setProperty(prop.MORE, { text: '0' })
+      if (r.freq)   r.freq.setProperty(prop.MORE, { text: '0' })
+      if (r.swg)    r.swg.setProperty(prop.MORE, { text: '0' })
+      if (r.rally)  r.rally.setProperty(prop.MORE, { text: '0' })
+      if (r.fh)     r.fh.setProperty(prop.MORE, { text: '0' })
+      if (r.bh)     r.bh.setProperty(prop.MORE, { text: '0' })
+    } catch(e) {
+      logger.error('>>> endWorkout ERROR: ' + e.message)
+    }
+    logger.info('>>> endWorkout END')
   },
 
   _stopSensor() {
     try {
+      logger.info('>>> _stopSensor: offChange & stop')
       this.accel.offChange()
       this.accel.stop()
       this.gyro.offChange()
       this.gyro.stop()
-    } catch(e) {}
+    } catch(e) {
+      logger.error('>>> _stopSensor ERROR: ' + e.message)
+    }
   },
 
   _startSensor() {
     try {
+      logger.info('>>> _startSensor START')
       const mv = () => this._onMotion()
       this.accel.onChange(mv)
       this.accel.setFreqMode(FREQ_MODE_HIGH)
@@ -144,9 +185,9 @@ DataWidget({
       this.gyro.onChange(mv)
       this.gyro.setFreqMode(FREQ_MODE_HIGH)
       this.gyro.start()
-      logger.info('Sensors started')
+      logger.info('>>> Sensors started')
     } catch(e) {
-      logger.warn('sensor start fail', e)
+      logger.error('>>> _startSensor ERROR: ' + e.message)
     }
   },
 
@@ -155,231 +196,291 @@ DataWidget({
   // ============================================================
   _getSportDuration() {
     try {
+      logger.info('>>> _getSportDuration START')
       const data = getSportData({ edit_id: 1 })
-      // 直接取 duration 字段
       if (data && data.duration !== undefined) {
+        logger.info('>>> _getSportDuration: ' + data.duration)
         return data.duration
       }
     } catch(e) {
-      logger.warn('getSportDuration failed', e)
+      logger.error('>>> _getSportDuration ERROR: ' + e.message)
     }
     return 0
   },
 
   // ============================================================
   // 检查暂停状态
-  // 如果当前时长超过 10 秒不变，认为是暂停
   // ============================================================
   _checkPauseStatus() {
-    const currentDuration = this._getSportDuration()
+    try {
+      logger.info('>>> _checkPauseStatus START')
+      const currentDuration = this._getSportDuration()
+      logger.info('>>> currentDuration: ' + currentDuration + ', _lastDuration: ' + this._lastDuration + ', _isPaused: ' + this._isPaused)
 
-    if (currentDuration > 0 && this._lastDuration > 0) {
-      if (currentDuration <= this._lastDuration) {
-        // 时长没变化或减少 = 暂停
-        if (!this._isPaused) {
-          this._isPaused = true
-          this._stopSensor()
-          logger.info('Workout paused')
-        }
-      } else {
-        // 时长增加 = 运动中
-        if (this._isPaused) {
-          this._isPaused = false
-          this._startSensor()
-          logger.info('Workout resumed')
+      if (currentDuration > 0 && this._lastDuration > 0) {
+        if (currentDuration <= this._lastDuration) {
+          if (!this._isPaused) {
+            this._isPaused = true
+            this._stopSensor()
+            logger.info('>>> Workout paused')
+          }
+        } else {
+          if (this._isPaused) {
+            this._isPaused = false
+            this._startSensor()
+            logger.info('>>> Workout resumed')
+          }
         }
       }
+      this._lastDuration = currentDuration
+      logger.info('>>> _checkPauseStatus END')
+    } catch(e) {
+      logger.error('>>> _checkPauseStatus ERROR: ' + e.message)
     }
-
-    this._lastDuration = currentDuration
   },
 
   // ============================================================
   // 启动暂停检测计时器
   // ============================================================
   _startPauseTimer() {
-    this._stopPauseTimer()  // 先停止旧的
-    this._pauseCheckTimer = setTimeout(function tick(self) {
-      self._checkPauseStatus()
-      self._pauseCheckTimer = setTimeout(tick, PAUSE_CHECK_INTERVAL_MS, self)
-    }, PAUSE_CHECK_INTERVAL_MS, this)
+    try {
+      logger.info('>>> _startPauseTimer START')
+      this._stopPauseTimer()
+      this._pauseCheckTimer = setTimeout(function tick(self) {
+        self._checkPauseStatus()
+        self._pauseCheckTimer = setTimeout(tick, PAUSE_CHECK_INTERVAL_MS, self)
+      }, PAUSE_CHECK_INTERVAL_MS, this)
+      logger.info('>>> _startPauseTimer END')
+    } catch(e) {
+      logger.error('>>> _startPauseTimer ERROR: ' + e.message)
+    }
   },
 
   // ============================================================
   // 停止暂停检测计时器
   // ============================================================
   _stopPauseTimer() {
-    if (this._pauseCheckTimer) {
-      clearTimeout(this._pauseCheckTimer)
-      this._pauseCheckTimer = null
+    try {
+      logger.info('>>> _stopPauseTimer START')
+      if (this._pauseCheckTimer) {
+        clearTimeout(this._pauseCheckTimer)
+        this._pauseCheckTimer = null
+      }
+      logger.info('>>> _stopPauseTimer END')
+    } catch(e) {
+      logger.error('>>> _stopPauseTimer ERROR: ' + e.message)
     }
   },
 
   _saveToStorage() {
     try {
+      logger.info('>>> _saveToStorage START')
       const state = this.engine.saveState()
-      // 保存当前 duration 用于新运动检测
       state.lastDuration = this._getSportDuration()
-      // Zepp OS localStorage 可能需要手动序列化
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+      logger.info('>>> _saveToStorage END')
     } catch(e) {
-      logger.warn('save to storage failed', e)
+      logger.error('>>> _saveToStorage ERROR: ' + e.message)
     }
-  },
-
-  _loadFromStorage() {
-    try {
-      const data = localStorage.getItem(STORAGE_KEY)
-      if (data) return JSON.parse(data)
-    } catch(e) {}
-    return null
   },
 
   _clearStorage() {
     try {
+      logger.info('>>> _clearStorage START')
       localStorage.removeItem(STORAGE_KEY)
-      logger.info('Session cleared from storage')
-    } catch(e) {}
+      logger.info('>>> _clearStorage END')
+    } catch(e) {
+      logger.error('>>> _clearStorage ERROR: ' + e.message)
+    }
   },
 
   _clearPage() {
-    this._pageWidgets.forEach(w => { try { hmUI.deleteWidget(w) } catch(e) {} })
-    this._pageWidgets = []
-    this.state.refs = {}
+    try {
+      logger.info('>>> _clearPage START')
+      this._pageWidgets.forEach(w => { try { hmUI.deleteWidget(w) } catch(e) {} })
+      this._pageWidgets = []
+      this.state.refs = {}
+      logger.info('>>> _clearPage END')
+    } catch(e) {
+      logger.error('>>> _clearPage ERROR: ' + e.message)
+    }
   },
 
   _w(widgetType, options) {
-    const w = createWidget(widgetType, options)
-    this._pageWidgets.push(w)
-    return w
+    try {
+      const w = createWidget(widgetType, options)
+      this._pageWidgets.push(w)
+      return w
+    } catch(e) {
+      logger.error('>>> _w ERROR (' + widgetType + '): ' + e.message)
+      return null
+    }
   },
 
   _updateFromEngine() {
-    const m = this.engine.buildMetrics({
-      durationSeconds: 0,
-      calories: 0,
-      currentHeartRate: 0,
-    })
-    const r = this.state.refs
-    if (r.spd)    r.spd.setProperty(prop.MORE, { text: String(m.maxSpeed) })
-    if (r.freq)   r.freq.setProperty(prop.MORE, { text: String(m.swingsPerMinute) })
-    if (r.swg)    r.swg.setProperty(prop.MORE, { text: String(m.totalSwings) })
-    if (r.rally)  r.rally.setProperty(prop.MORE, { text: String(m.longestRally) })
-    if (r.fh)     r.fh.setProperty(prop.MORE, { text: String(m.forehandCount) })
-    if (r.bh)     r.bh.setProperty(prop.MORE, { text: String(m.backhandCount) })
-
-    // 实时保存到持久化存储
-    this._saveToStorage()
+    try {
+      logger.info('>>> _updateFromEngine START')
+      const m = this.engine.buildMetrics({
+        durationSeconds: 0,
+        calories: 0,
+        currentHeartRate: 0,
+      })
+      const r = this.state.refs
+      if (r.spd)    r.spd.setProperty(prop.MORE, { text: String(m.maxSpeed) })
+      if (r.freq)   r.freq.setProperty(prop.MORE, { text: String(m.swingsPerMinute) })
+      if (r.swg)    r.swg.setProperty(prop.MORE, { text: String(m.totalSwings) })
+      if (r.rally)  r.rally.setProperty(prop.MORE, { text: String(m.longestRally) })
+      if (r.fh)     r.fh.setProperty(prop.MORE, { text: String(m.forehandCount) })
+      if (r.bh)     r.bh.setProperty(prop.MORE, { text: String(m.backhandCount) })
+      this._saveToStorage()
+      logger.info('>>> _updateFromEngine END')
+    } catch(e) {
+      logger.error('>>> _updateFromEngine ERROR: ' + e.message)
+    }
   },
 
   _buildPage() {
+    logger.info('>>> _buildPage START')
     const s = this.state
 
-    // 深色背景
-    this._w(widget.FILL_RECT, { x: 0, y: 0, w: LAYOUT_W, h: LAYOUT_H, color: C_BG })
+    try {
+      logger.info('>>> FILL_RECT bg')
+      this._w(widget.FILL_RECT, { x: 0, y: 0, w: LAYOUT_W, h: LAYOUT_H, color: C_BG })
+    } catch(e) { logger.error('>>> FILL_RECT ERROR: ' + e.message) }
 
-    // ---- 顶部：时长 (官方 SPORT_DATA - 暂停时自动停止) ----
-    this._w(widget.SPORT_DATA, {
-      edit_id: 1,
-      category: edit_widget_group_type.SPORTS,
-      default_type: sport_data.DURATION_NET,
-      x: durStyle.x, y: durStyle.y, w: durStyle.w, h: durStyle.h,
-      text_size: durStyle.textSize,
-      text_color: C_YELLOW,
-    })
+    try {
+      logger.info('>>> SPORT_DATA duration')
+      this._w(widget.SPORT_DATA, {
+        edit_id: 1,
+        category: edit_widget_group_type.SPORTS,
+        default_type: sport_data.DURATION_NET,
+        x: durStyle.x, y: durStyle.y, w: durStyle.w, h: durStyle.h,
+        text_size: durStyle.textSize,
+        text_color: C_YELLOW,
+      })
+    } catch(e) { logger.error('>>> SPORT_DATA ERROR: ' + e.message) }
 
-    // ---- 最高速度 (自己计算) ----
-    s.refs.spd = this._w(widget.TEXT, {
-      x: spdStyle.x, y: spdStyle.y, w: spdStyle.w, h: spdStyle.h,
-      color: C_RED, text_size: spdStyle.textSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: '--',
-    })
-    // 标签 + 单位
-    this._w(widget.TEXT, {
-      x: spdStyle.labelX, y: spdStyle.labelY, w: spdStyle.w, h: spdStyle.labelH,
-      color: C_GRAY, text_size: spdStyle.labelSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: getText('maxSpeed') + ' km/h',
-    })
+    try {
+      logger.info('>>> TEXT spd value')
+      s.refs.spd = this._w(widget.TEXT, {
+        x: spdStyle.x, y: spdStyle.y, w: spdStyle.w, h: spdStyle.h,
+        color: C_RED, text_size: spdStyle.textSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: '--',
+      })
+    } catch(e) { logger.error('>>> TEXT spd ERROR: ' + e.message) }
 
-    // ---- 频率 (自己计算) ----
-    s.refs.freq = this._w(widget.TEXT, {
-      x: freqStyle.x, y: freqStyle.y, w: freqStyle.w, h: freqStyle.h,
-      color: C_BLUE, text_size: freqStyle.textSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: '--',
-    })
-    // 标签 + 单位
-    this._w(widget.TEXT, {
-      x: freqStyle.labelX, y: freqStyle.labelY, w: freqStyle.w, h: freqStyle.labelH,
-      color: C_GRAY, text_size: freqStyle.labelSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: getText('frequency') + ' /min',
-    })
+    try {
+      logger.info('>>> TEXT spd label')
+      this._w(widget.TEXT, {
+        x: spdStyle.labelX, y: spdStyle.labelY, w: spdStyle.w, h: spdStyle.labelH,
+        color: C_GRAY, text_size: spdStyle.labelSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: getText('maxSpeed') + ' km/h',
+      })
+    } catch(e) { logger.error('>>> TEXT spd label ERROR: ' + e.message) }
 
-    // ---- 挥拍 (自己计算) ----
-    s.refs.swg = this._w(widget.TEXT, {
-      x: swgStyle.x, y: swgStyle.y, w: swgStyle.w, h: swgStyle.h,
-      color: C_GREEN, text_size: swgStyle.textSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: '--',
-    })
-    this._w(widget.TEXT, {
-      x: swgStyle.labelX, y: swgStyle.labelY, w: swgStyle.w, h: swgStyle.labelH,
-      color: C_GRAY, text_size: swgStyle.labelSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: getText('swings'),
-    })
+    try {
+      logger.info('>>> TEXT freq value')
+      s.refs.freq = this._w(widget.TEXT, {
+        x: freqStyle.x, y: freqStyle.y, w: freqStyle.w, h: freqStyle.h,
+        color: C_BLUE, text_size: freqStyle.textSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: '--',
+      })
+    } catch(e) { logger.error('>>> TEXT freq ERROR: ' + e.message) }
 
-    // ---- 连拍 (自己计算) ----
-    s.refs.rally = this._w(widget.TEXT, {
-      x: rallyStyle.x, y: rallyStyle.y, w: rallyStyle.w, h: rallyStyle.h,
-      color: C_ORANGE, text_size: rallyStyle.textSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: '--',
-    })
-    this._w(widget.TEXT, {
-      x: rallyStyle.labelX, y: rallyStyle.labelY, w: rallyStyle.w, h: rallyStyle.labelH,
-      color: C_GRAY, text_size: rallyStyle.labelSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: getText('rally'),
-    })
+    try {
+      logger.info('>>> TEXT freq label')
+      this._w(widget.TEXT, {
+        x: freqStyle.labelX, y: freqStyle.labelY, w: freqStyle.w, h: freqStyle.labelH,
+        color: C_GRAY, text_size: freqStyle.labelSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: getText('frequency') + ' /min',
+      })
+    } catch(e) { logger.error('>>> TEXT freq label ERROR: ' + e.message) }
 
-    // ---- 正手 (自己计算) ----
-    s.refs.fh = this._w(widget.TEXT, {
-      x: fhStyle.x, y: fhStyle.y, w: fhStyle.w, h: fhStyle.h,
-      color: C_GREEN, text_size: fhStyle.textSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: '--',
-    })
-    this._w(widget.TEXT, {
-      x: fhStyle.labelX, y: fhStyle.labelY, w: fhStyle.w, h: fhStyle.labelH,
-      color: C_GRAY, text_size: fhStyle.labelSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: getText('forehand'),
-    })
+    try {
+      logger.info('>>> TEXT swg value')
+      s.refs.swg = this._w(widget.TEXT, {
+        x: swgStyle.x, y: swgStyle.y, w: swgStyle.w, h: swgStyle.h,
+        color: C_GREEN, text_size: swgStyle.textSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: '--',
+      })
+    } catch(e) { logger.error('>>> TEXT swg ERROR: ' + e.message) }
 
-    // ---- 反手 (自己计算) ----
-    s.refs.bh = this._w(widget.TEXT, {
-      x: bhStyle.x, y: bhStyle.y, w: bhStyle.w, h: bhStyle.h,
-      color: C_BLUE, text_size: bhStyle.textSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: '--',
-    })
-    this._w(widget.TEXT, {
-      x: bhStyle.labelX, y: bhStyle.labelY, w: bhStyle.w, h: bhStyle.labelH,
-      color: C_GRAY, text_size: bhStyle.labelSize,
-      align_h: align.CENTER_H, align_v: align.CENTER_V,
-      text_style: text_style.NONE, text: getText('backhand'),
-    })
+    try {
+      logger.info('>>> TEXT swg label')
+      this._w(widget.TEXT, {
+        x: swgStyle.labelX, y: swgStyle.labelY, w: swgStyle.w, h: swgStyle.labelH,
+        color: C_GRAY, text_size: swgStyle.labelSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: getText('swings'),
+      })
+    } catch(e) { logger.error('>>> TEXT swg label ERROR: ' + e.message) }
 
-    // ---- 四角切圆（覆盖最上层，用黑色遮住四角）----
-    const CR = 24  // 圆角半径
-    this._w(widget.CIRCLE, { center_x: 0,        center_y: 0,        radius: CR, color: 0x000000 })
-    this._w(widget.CIRCLE, { center_x: LAYOUT_W,  center_y: 0,        radius: CR, color: 0x000000 })
-    this._w(widget.CIRCLE, { center_x: 0,        center_y: LAYOUT_H,  radius: CR, color: 0x000000 })
-    this._w(widget.CIRCLE, { center_x: LAYOUT_W,  center_y: LAYOUT_H,  radius: CR, color: 0x000000 })
+    try {
+      logger.info('>>> TEXT rally value')
+      s.refs.rally = this._w(widget.TEXT, {
+        x: rallyStyle.x, y: rallyStyle.y, w: rallyStyle.w, h: rallyStyle.h,
+        color: C_ORANGE, text_size: rallyStyle.textSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: '--',
+      })
+    } catch(e) { logger.error('>>> TEXT rally ERROR: ' + e.message) }
+
+    try {
+      logger.info('>>> TEXT rally label')
+      this._w(widget.TEXT, {
+        x: rallyStyle.labelX, y: rallyStyle.labelY, w: rallyStyle.w, h: rallyStyle.labelH,
+        color: C_GRAY, text_size: rallyStyle.labelSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: getText('rally'),
+      })
+    } catch(e) { logger.error('>>> TEXT rally label ERROR: ' + e.message) }
+
+    try {
+      logger.info('>>> TEXT fh value')
+      s.refs.fh = this._w(widget.TEXT, {
+        x: fhStyle.x, y: fhStyle.y, w: fhStyle.w, h: fhStyle.h,
+        color: C_GREEN, text_size: fhStyle.textSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: '--',
+      })
+    } catch(e) { logger.error('>>> TEXT fh ERROR: ' + e.message) }
+
+    try {
+      logger.info('>>> TEXT fh label')
+      this._w(widget.TEXT, {
+        x: fhStyle.labelX, y: fhStyle.labelY, w: fhStyle.w, h: fhStyle.labelH,
+        color: C_GRAY, text_size: fhStyle.labelSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: getText('forehand'),
+      })
+    } catch(e) { logger.error('>>> TEXT fh label ERROR: ' + e.message) }
+
+    try {
+      logger.info('>>> TEXT bh value')
+      s.refs.bh = this._w(widget.TEXT, {
+        x: bhStyle.x, y: bhStyle.y, w: bhStyle.w, h: bhStyle.h,
+        color: C_BLUE, text_size: bhStyle.textSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: '--',
+      })
+    } catch(e) { logger.error('>>> TEXT bh ERROR: ' + e.message) }
+
+    try {
+      logger.info('>>> TEXT bh label')
+      this._w(widget.TEXT, {
+        x: bhStyle.labelX, y: bhStyle.labelY, w: bhStyle.w, h: bhStyle.labelH,
+        color: C_GRAY, text_size: bhStyle.labelSize,
+        align_h: align.CENTER_H, align_v: align.CENTER_V,
+        text_style: text_style.NONE, text: getText('backhand'),
+      })
+    } catch(e) { logger.error('>>> TEXT bh label ERROR: ' + e.message) }
+
+    logger.info('>>> _buildPage END')
   },
 
   _onMotion() {
@@ -396,6 +497,8 @@ DataWidget({
 
       const action = this.engine.ingestMotion(accelData, gyroData, now)
       if (action) this._updateFromEngine()
-    } catch(e) {}
+    } catch(e) {
+      logger.error('>>> _onMotion ERROR: ' + e.message)
+    }
   },
 })
